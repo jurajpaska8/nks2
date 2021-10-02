@@ -1,6 +1,9 @@
 package fei.nks;
 
+import jdk.internal.util.xml.impl.Pair;
+
 import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -10,36 +13,6 @@ import java.util.stream.Stream;
 
 public class Main
 {
-    private static String bytesToHex(byte[] hash)
-    {
-        StringBuilder hexString = new StringBuilder(2 * hash.length);
-        for (byte b : hash)
-        {
-            String hex = Integer.toHexString(0xff & b);
-            if (hex.length() == 1)
-            {
-                hexString.append('0');
-            }
-            hexString.append(hex);
-        }
-        return hexString.toString();
-    }
-
-    private static void bruteforce(byte[] hashToFind) throws NoSuchAlgorithmException
-    {
-        String id = "92318";
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        //String pin = "000000";
-        for(int i = 0; i <= 999999; i++)
-        {
-            String pattern = id + String.format("%06d", i);
-            byte[] encodedhash = digest.digest(pattern.getBytes(StandardCharsets.US_ASCII));
-            if(Arrays.equals(encodedhash, hashToFind))
-            {
-                System.out.println("find");
-            }
-        }
-    }
 
     private static List<Integer> generateUniqueNumbersInBase(int n, int base)
     {
@@ -57,13 +30,16 @@ public class Main
 
     private static List<String> prependStringToValues(String prepend, List<Integer> listOfValues)
     {
-//        List<String> returnValues = new ArrayList<>();
-//        listOfValues.forEach(sp -> returnValues.add(prepend + String.format("%06d",sp)));
-
         return listOfValues
                 .stream()
                 .map(sp -> prepend + String.format("%06d",sp))
                 .collect(Collectors.toList());
+    }
+
+    private static List<String> nRandomKeys(int n, int base, String id)
+    {
+        List<Integer> ints = generateUniqueNumbersInBase(n, base);
+        return prependStringToValues(id, ints);
     }
 
     // another reduction can be base64
@@ -109,39 +85,38 @@ public class Main
         return map.containsKey(reducedHash);
     }
 
-
-    private static void tryAllEntries(byte[] hash, TreeMap<String, String> map, int t, int n, String id) throws NoSuchAlgorithmException
+    /**
+     * Returns number of applied reductions in order to find pattern, or 0, if pater was not found.
+     * */
+    private static ReductionsEndpointPair tryAllEntries(byte[] hash, TreeMap<String, String> map, int t, int n, String id) throws NoSuchAlgorithmException
     {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        String reducedHash = null;
-        boolean found = false;
-        int reductions = 0;
+        String reducedHash;
+        int reductions;
         for(int i = 0; i < t; i++)
         {
             reducedHash = reduceHashToNDigitsAndPrependValue(hash, n, id);
             reductions = i + 1;
             if(isReducedHashInTreeMap(reducedHash, map))
             {
-                System.out.println("Key: " + reducedHash + ", retrieved after :" + reductions + " reductions is endpoint");
-                System.out.println("Searched Key is :" + reductions + " cols on the left from endpoint: " + reducedHash);
-                found = true;
-                break;
+                //System.out.println("Wanted Key is :" + reductions + " cols on the left from endpoint: " + reducedHash);
+                return new ReductionsEndpointPair(reductions, reducedHash);
             }
             hash = digest.digest(reducedHash.getBytes(StandardCharsets.US_ASCII));
         }
+        return new ReductionsEndpointPair(-1, "");
+    }
 
-        if(found)
+    private static String returnWantedKey(TreeMap<String, String> map, ReductionsEndpointPair pair, int t,  MessageDigest digest, String id)
+    {
+        String tmpKey = map.get(pair.endpoint);
+        int numOfEncAndRed = t - pair.reductions;
+        for(int i = 0; i < numOfEncAndRed; i++)
         {
-            // find starting point
-            String sp = map.get(reducedHash);
-            int numOfEncAndRed = t - reductions;
-            for(int i = 0; i < numOfEncAndRed; i++)
-            {
-                byte[] h = digest.digest(sp.getBytes(StandardCharsets.US_ASCII));
-                sp = reduceHashToNDigitsAndPrependValue(h, 6, id);
-            }
-            System.out.println(sp);
+            byte[] h = digest.digest(tmpKey.getBytes(StandardCharsets.US_ASCII));
+            tmpKey = reduceHashToNDigitsAndPrependValue(h, 6, id);
         }
+        return tmpKey;
     }
 
     /**
@@ -188,6 +163,56 @@ public class Main
         return treeMap;
     }
 
+    private static void test100lines100columns1000values() throws NoSuchAlgorithmException
+    {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        int keysToTryCount = 1_000;
+        int base = 1_000_000;
+        int numberOfDigitsInPin = 6;
+        int m = 100;
+        int t = 100;
+        String id = "92318";
+
+        // create table
+        String[][] arrayTable = createTable(m, t, id, base);
+
+        // create tree map
+        TreeMap<String, String> treeMap = createTreeMap(arrayTable);
+
+        // create random values
+        List<String> randomKeys = nRandomKeys(keysToTryCount, base, id);
+        List<byte[]> hashesFromRandomKeys = randomKeys
+                .stream()
+                .map(k -> digest.digest(k.getBytes(StandardCharsets.US_ASCII)))
+                .collect(Collectors.toList());
+
+        List<String> retrievedKeysFromHashesHellman = new ArrayList<>();
+        for(byte[] hash : hashesFromRandomKeys)
+        {
+            ReductionsEndpointPair pair = tryAllEntries(hash, treeMap, t, numberOfDigitsInPin, id);
+            if(pair.reductions != -1)
+            {
+                String wantedKey = returnWantedKey(treeMap, pair, t, digest, id);
+                //System.out.println(wantedKey + " found");
+                retrievedKeysFromHashesHellman.add(wantedKey);
+            }
+            else
+            {
+                //System.out.println("Not Found");
+                retrievedKeysFromHashesHellman.add("");
+            }
+        }
+
+        long numberOfNonEmptyValues = retrievedKeysFromHashesHellman.stream().filter(k -> k.length() > 0).count();
+        long numberOfEqualKeys = 0;
+        for(int i = 0; i < retrievedKeysFromHashesHellman.size(); i++)
+        {
+            if(retrievedKeysFromHashesHellman.get(i).equals(randomKeys.get(i)))
+                numberOfEqualKeys++;
+        }
+
+    }
+
     // Message digest is not thread safe - needed to use new instance in different threads
     public static void main(String[] args) throws NoSuchAlgorithmException
     {
@@ -215,8 +240,14 @@ public class Main
 
         // try to find key from hash in table
         System.out.println("Searching for key: " + keyToFind);
-        tryAllEntries(hashFromKeyToFind, treeMap, t, numberOfDigitsInPin, id);
+        ReductionsEndpointPair pair = tryAllEntries(hashFromKeyToFind, treeMap, t, numberOfDigitsInPin, id);
+        if(pair.reductions != -1)
+        {
+            String wantedKey = returnWantedKey(treeMap, pair, t, digest, id);
+            System.out.println(wantedKey + " found");
+        }
 
+        test100lines100columns1000values();
         System.out.println("end");
 
     }

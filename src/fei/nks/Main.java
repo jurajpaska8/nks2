@@ -100,7 +100,13 @@ public class Main
             if(isReducedHashInTreeMap(reducedHash, map))
             {
                 //System.out.println("Wanted Key is :" + reductions + " cols on the left from endpoint: " + reducedHash);
-                return new ReductionsEndpointPair(reductions, reducedHash);
+                return  new ReductionsEndpointPair(reductions, reducedHash);
+                //ReductionsEndpointPair pair = new ReductionsEndpointPair(reductions, reducedHash);
+//                String wantedKey = returnWantedKey(map, pair, t, digest, id);
+//                if(Arrays.equals(digest.digest(wantedKey.getBytes(StandardCharsets.US_ASCII)), hash))
+//                {
+//                    return pair;
+//                }
             }
             hash = digest.digest(reducedHash.getBytes(StandardCharsets.US_ASCII));
         }
@@ -194,7 +200,14 @@ public class Main
             {
                 String wantedKey = returnWantedKey(treeMap, pair, t, digest, id);
                 //System.out.println(wantedKey + " found");
-                retrievedKeysFromHashesHellman.add(wantedKey);
+                if(Arrays.equals(digest.digest(wantedKey.getBytes(StandardCharsets.US_ASCII)), hash))
+                {
+                    retrievedKeysFromHashesHellman.add(wantedKey);
+                }
+                else
+                {
+                    retrievedKeysFromHashesHellman.add("");
+                }
             }
             else
             {
@@ -211,41 +224,61 @@ public class Main
                 numberOfEqualKeys++;
         }
 
+        // check
+        int numberOfKeysIncludedInArrayTableAndInRandomValues = 0;
+        for(String str : randomKeys)
+        {
+            boolean found = false;
+            for(String[] arr : arrayTable)
+            {
+                if(found) break;
+                for(String tmp : arr)
+                {
+                    if(tmp.equals(str))
+                    {
+                        numberOfKeysIncludedInArrayTableAndInRandomValues++;
+                        found = true;
+                        break;
+                    }
+                }
+            }
+        }
+
     }
 
     // Message digest is not thread safe - needed to use new instance in different threads
     public static void main(String[] args) throws NoSuchAlgorithmException
     {
-        String id = "92318";
-        int baseOfPin = 1_000_000;
-        int numberOfDigitsInPin = 6;
-        // rows
-        int m = 100;
-        // cols
-        int t = 100;
-
-        // create table
-        String[][] arrayTable = createTable(m, t, id, baseOfPin);
-
-        // create tree map
-        TreeMap<String, String> treeMap = createTreeMap(arrayTable);
-
-
-        // test if image of key[2][96] is equal to key[2][97]
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        String keyToFind = arrayTable[2][99];
-        byte[] hashFromKeyToFind = digest.digest(keyToFind.getBytes(StandardCharsets.US_ASCII));
-        String check = arrayTable[2][97];
-        String reducedHash = reduceHashToNDigitsAndPrependValue(hashFromKeyToFind, numberOfDigitsInPin, id);
-
-        // try to find key from hash in table
-        System.out.println("Searching for key: " + keyToFind);
-        ReductionsEndpointPair pair = tryAllEntries(hashFromKeyToFind, treeMap, t, numberOfDigitsInPin, id);
-        if(pair.reductions != -1)
-        {
-            String wantedKey = returnWantedKey(treeMap, pair, t, digest, id);
-            System.out.println(wantedKey + " found");
-        }
+//        String id = "92318";
+//        int baseOfPin = 1_000_000;
+//        int numberOfDigitsInPin = 6;
+//        // rows
+//        int m = 100;
+//        // cols
+//        int t = 100;
+//
+//        // create table
+//        String[][] arrayTable = createTable(m, t, id, baseOfPin);
+//
+//        // create tree map
+//        TreeMap<String, String> treeMap = createTreeMap(arrayTable);
+//
+//
+//        // test if image of key[2][96] is equal to key[2][97]
+//        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+//        String keyToFind = arrayTable[2][99];
+//        byte[] hashFromKeyToFind = digest.digest(keyToFind.getBytes(StandardCharsets.US_ASCII));
+//        String check = arrayTable[2][97];
+//        String reducedHash = reduceHashToNDigitsAndPrependValue(hashFromKeyToFind, numberOfDigitsInPin, id);
+//
+//        // try to find key from hash in table
+//        System.out.println("Searching for key: " + keyToFind);
+//        ReductionsEndpointPair pair = tryAllEntries(hashFromKeyToFind, treeMap, t, numberOfDigitsInPin, id);
+//        if(pair.reductions != -1)
+//        {
+//            String wantedKey = returnWantedKey(treeMap, pair, t, digest, id);
+//            System.out.println(wantedKey + " found");
+//        }
 
         test100lines100columns1000values();
         System.out.println("end");

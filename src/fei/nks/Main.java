@@ -4,6 +4,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -167,8 +169,13 @@ public class Main
         int base = 1_000_000;
         int numberOfDigitsInPin = 6;
         int m = 100;
-        int t = 100;
+        int t = 10000;
         String id = "92318";
+
+        // alarms check
+        int falseAlarms = 0;
+        int positiveAlarms = 0;
+        int alarms = 0;
 
         // create table
         String[][] arrayTable = createTable(m, t, id, base);
@@ -183,13 +190,17 @@ public class Main
 
         // retrieve all keys
         List<String> retrievedKeysFromHashesHellman = new ArrayList<>();
+        Instant start = Instant.now();
+        int hasctr = 0;
         for(byte[] hash : hashesFromRandomKeys)
         {
+            System.out.println(hasctr++);
             // retrieve all values, which can possibly lead to successful decoding (including false alarms)
             // ReductionEndpointPair contains number of reductions from particular endpoint in order to retrieve key
             List<ReductionsEndpointPair> pairs = tryAllEntries(hash, treeMap, t, numberOfDigitsInPin, id);
             if(pairs.size() > 0)
             {
+                alarms += pairs.size();
                 String tmp = "";
                 for(ReductionsEndpointPair pair : pairs)
                 {
@@ -198,7 +209,11 @@ public class Main
                     if(Arrays.equals(digest.digest(wantedKey.getBytes(StandardCharsets.US_ASCII)), hash))
                     {
                         tmp = wantedKey;
-                        break;
+                        positiveAlarms++;
+                    }
+                    else
+                    {
+                        falseAlarms++;
                     }
                 }
                 retrievedKeysFromHashesHellman.add(tmp);
@@ -208,6 +223,9 @@ public class Main
                 retrievedKeysFromHashesHellman.add("");
             }
         }
+
+        Instant finish = Instant.now();
+        long timeElapsed = Duration.between(start, finish).toMillis();
 
         // checks all three variables should give same output
         long numberOfNonEmptyValues = retrievedKeysFromHashesHellman.stream().filter(k -> k.length() > 0).count();
@@ -226,9 +244,10 @@ public class Main
             for(String[] arr : arrayTable)
             {
                 if(found) break;
-                for(String tmp : arr)
+                // we do not consider EP as entry
+                for(int i = 0; i < arr.length - 1; i++)
                 {
-                    if(tmp.equals(str))
+                    if(arr[i].equals(str))
                     {
                         numberOfKeysIncludedInArrayTableAndInRandomValues++;
                         found = true;
@@ -251,37 +270,6 @@ public class Main
     // Message digest is not thread safe - needed to use new instance in different threads
     public static void main(String[] args) throws NoSuchAlgorithmException
     {
-//        String id = "92318";
-//        int baseOfPin = 1_000_000;
-//        int numberOfDigitsInPin = 6;
-//        // rows
-//        int m = 100;
-//        // cols
-//        int t = 100;
-//
-//        // create table
-//        String[][] arrayTable = createTable(m, t, id, baseOfPin);
-//
-//        // create tree map
-//        TreeMap<String, String> treeMap = createTreeMap(arrayTable);
-//
-//
-//        // test if image of key[2][96] is equal to key[2][97]
-//        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-//        String keyToFind = arrayTable[2][99];
-//        byte[] hashFromKeyToFind = digest.digest(keyToFind.getBytes(StandardCharsets.US_ASCII));
-//        String check = arrayTable[2][97];
-//        String reducedHash = reduceHashToNDigitsAndPrependValue(hashFromKeyToFind, numberOfDigitsInPin, id);
-//
-//        // try to find key from hash in table
-//        System.out.println("Searching for key: " + keyToFind);
-//        ReductionsEndpointPair pair = tryAllEntries(hashFromKeyToFind, treeMap, t, numberOfDigitsInPin, id);
-//        if(pair.reductions != -1)
-//        {
-//            String wantedKey = returnWantedKey(treeMap, pair, t, digest, id);
-//            System.out.println(wantedKey + " found");
-//        }
-
         test100lines100columns1000values();
         System.out.println("end");
 

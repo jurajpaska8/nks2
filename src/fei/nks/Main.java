@@ -88,10 +88,11 @@ public class Main
     /**
      * Returns number of applied reductions in order to find pattern, or 0, if pater was not found.
      * */
-    private static ReductionsEndpointPair tryAllEntries(byte[] hash, TreeMap<String, String> map, int t, int n, String id) throws NoSuchAlgorithmException
+    private static List<ReductionsEndpointPair> tryAllEntries(byte[] hash, TreeMap<String, String> map, int t, int n, String id) throws NoSuchAlgorithmException
     {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         String reducedHash;
+        List<ReductionsEndpointPair> listOfPairs = new ArrayList<>();
         int reductions;
         for(int i = 0; i < t; i++)
         {
@@ -99,18 +100,12 @@ public class Main
             reductions = i + 1;
             if(isReducedHashInTreeMap(reducedHash, map))
             {
-                //System.out.println("Wanted Key is :" + reductions + " cols on the left from endpoint: " + reducedHash);
-                return  new ReductionsEndpointPair(reductions, reducedHash);
-                //ReductionsEndpointPair pair = new ReductionsEndpointPair(reductions, reducedHash);
-//                String wantedKey = returnWantedKey(map, pair, t, digest, id);
-//                if(Arrays.equals(digest.digest(wantedKey.getBytes(StandardCharsets.US_ASCII)), hash))
-//                {
-//                    return pair;
-//                }
+                ReductionsEndpointPair rp = new ReductionsEndpointPair(reductions, reducedHash);
+                listOfPairs.add(rp);
             }
             hash = digest.digest(reducedHash.getBytes(StandardCharsets.US_ASCII));
         }
-        return new ReductionsEndpointPair(-1, "");
+        return listOfPairs;
     }
 
     private static String returnWantedKey(TreeMap<String, String> map, ReductionsEndpointPair pair, int t,  MessageDigest digest, String id)
@@ -195,19 +190,22 @@ public class Main
         List<String> retrievedKeysFromHashesHellman = new ArrayList<>();
         for(byte[] hash : hashesFromRandomKeys)
         {
-            ReductionsEndpointPair pair = tryAllEntries(hash, treeMap, t, numberOfDigitsInPin, id);
-            if(pair.reductions != -1)
+            List<ReductionsEndpointPair> pairs = tryAllEntries(hash, treeMap, t, numberOfDigitsInPin, id);
+            if(pairs.size() > 0)
             {
-                String wantedKey = returnWantedKey(treeMap, pair, t, digest, id);
-                //System.out.println(wantedKey + " found");
-                if(Arrays.equals(digest.digest(wantedKey.getBytes(StandardCharsets.US_ASCII)), hash))
+                String tmp = "";
+                for(ReductionsEndpointPair pair : pairs)
                 {
-                    retrievedKeysFromHashesHellman.add(wantedKey);
+                    String wantedKey = returnWantedKey(treeMap, pair, t, digest, id);
+                    //System.out.println(wantedKey + " found");
+                    if(Arrays.equals(digest.digest(wantedKey.getBytes(StandardCharsets.US_ASCII)), hash))
+                    {
+                        tmp = wantedKey;
+                        break;
+                    }
                 }
-                else
-                {
-                    retrievedKeysFromHashesHellman.add("");
-                }
+                retrievedKeysFromHashesHellman.add(tmp);
+
             }
             else
             {

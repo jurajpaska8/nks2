@@ -104,6 +104,45 @@ public class Main
                 .collect(Collectors.toList());
     }
 
+    private static boolean isReducedHashInTreeMap(String reducedHash, TreeMap<String, String> map)
+    {
+        return map.containsKey(reducedHash);
+    }
+
+
+    private static void tryAllEntries(byte[] hash, TreeMap<String, String> map, int count, int n, String id) throws NoSuchAlgorithmException
+    {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        String reducedHash = null;
+        boolean found = false;
+        int reductions = 0;
+        for(int i = 0; i < count; i++)
+        {
+            reducedHash = reduceHashToNDigitsAndPrependValue(hash, n, id);
+            if(isReducedHashInTreeMap(reducedHash, map))
+            {
+                System.out.println("Key: " + reducedHash + ", retrieved after :" + i + " reductions");
+                reductions = i + 1;
+                found = true;
+                break;
+            }
+            hash = digest.digest(reducedHash.getBytes(StandardCharsets.US_ASCII));
+        }
+
+        if(found)
+        {
+            // find starting point
+            String sp = map.get(reducedHash);
+            int numOfEncAndRed = 100 - reductions;
+            for(int i = 0; i < numOfEncAndRed; i++)
+            {
+                byte[] h = digest.digest(sp.getBytes(StandardCharsets.US_ASCII));
+                sp = reduceHashToNDigitsAndPrependValue(h, 6, id);
+            }
+            System.out.println(sp);
+        }
+    }
+
     private void test() throws NoSuchAlgorithmException
     {
         String id = "92318";
@@ -154,7 +193,7 @@ public class Main
 
         // create tree map
         TreeMap<String, String> treeMap = new TreeMap<>();
-
+        Arrays.stream(arrayTable).forEach(arr -> treeMap.put(arr[arr.length - 1], arr[0]));
 
         // create tree set
         TreeSet<String> treeSet = Arrays
@@ -164,12 +203,15 @@ public class Main
 
 
         // check if reduced hash from key is endpoint
-        String keyToFind = "92318000885";
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        String keyToFind = arrayTable[2][96];
         byte[] hashFromKeyToFind = digest.digest(keyToFind.getBytes(StandardCharsets.US_ASCII));
         String reducedHash = reduceHashToNDigitsAndPrependValue(hashFromKeyToFind, 6, id);
+        String check = arrayTable[2][97];
 
-
+        System.out.println("Searching for key: " + keyToFind);
+        tryAllEntries(hashFromKeyToFind, treeMap, 100, 6, id);
+// 2, 96
 
 
 

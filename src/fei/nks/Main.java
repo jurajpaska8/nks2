@@ -110,13 +110,13 @@ public class Main
     }
 
 
-    private static void tryAllEntries(byte[] hash, TreeMap<String, String> map, int count, int n, String id) throws NoSuchAlgorithmException
+    private static void tryAllEntries(byte[] hash, TreeMap<String, String> map, int t, int n, String id) throws NoSuchAlgorithmException
     {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         String reducedHash = null;
         boolean found = false;
         int reductions = 0;
-        for(int i = 0; i < count; i++)
+        for(int i = 0; i < t; i++)
         {
             reducedHash = reduceHashToNDigitsAndPrependValue(hash, n, id);
             if(isReducedHashInTreeMap(reducedHash, map))
@@ -133,7 +133,7 @@ public class Main
         {
             // find starting point
             String sp = map.get(reducedHash);
-            int numOfEncAndRed = 100 - reductions;
+            int numOfEncAndRed = t - reductions;
             for(int i = 0; i < numOfEncAndRed; i++)
             {
                 byte[] h = digest.digest(sp.getBytes(StandardCharsets.US_ASCII));
@@ -163,18 +163,21 @@ public class Main
 //        Comparator<String> comparatorMethodReference = String::compareTo;
     }
 
-    // Message digest is not thread safe - needed to use new instance in different threads
-    public static void main(String[] args) throws NoSuchAlgorithmException
+    /**
+     *
+     * Generates sorted hellman table of possible keys. It is sorted by endpoints (last element of each row)
+     *
+     * */
+    private static String[][] createTable(int m, int t, String id, int baseOfPIN) throws NoSuchAlgorithmException
     {
-        String id = "92318";
-        // generate 100 random numbers modulo 1 000 000
-        List<Integer> generatedValues = generateUniqueNumbersInBase(100, 1_000_000);
+        // generate m random numbers modulo baseOfPIN
+        List<Integer> generatedValues = generateUniqueNumbersInBase(m, baseOfPIN);
 
-        // create starting points
+        // create starting points: every key is in form ID+PIN
         List<String> startingPoints = prependStringToValues(id, generatedValues);
 
-        // create table
-        List<List<String>> table = generateTableFromStarterPoints(startingPoints, 100, id);
+        // create table - m rows * t cols
+        List<List<String>> table = generateTableFromStarterPoints(startingPoints, t, id);
 
         // to array
         String[][] arrayTable = table.stream()
@@ -190,30 +193,47 @@ public class Main
             }
         };
         Arrays.sort(arrayTable, comparator);
+        return arrayTable;
+    }
+
+    /**
+     * Final treeMap contains key-value pairs : (Endpoint, StartPoint). Sorted by keys (Endpoints)
+     * */
+    private static TreeMap<String, String> createTreeMap(String[][] arrayTable)
+    {
+        TreeMap<String, String> treeMap = new TreeMap<>();
+        Arrays.stream(arrayTable)
+                .forEach(arr -> treeMap.put(arr[arr.length - 1], arr[0]));
+        return treeMap;
+    }
+
+    // Message digest is not thread safe - needed to use new instance in different threads
+    public static void main(String[] args) throws NoSuchAlgorithmException
+    {
+        String id = "92318";
+        int baseOfPin = 1_000_000;
+        // rows
+        int m = 100;
+        // cols
+        int t = 100;
+
+        // create table
+        String[][] arrayTable = createTable(m, t, id, baseOfPin);
 
         // create tree map
-        TreeMap<String, String> treeMap = new TreeMap<>();
-        Arrays.stream(arrayTable).forEach(arr -> treeMap.put(arr[arr.length - 1], arr[0]));
-
-        // create tree set
-        TreeSet<String> treeSet = Arrays
-                .stream(arrayTable)
-                .map(arr -> arr[arr.length - 1])
-                .collect(Collectors.toCollection(TreeSet::new));
+        TreeMap<String, String> treeMap = createTreeMap(arrayTable);
 
 
-        // check if reduced hash from key is endpoint
+        // test if image of key[2][96] is equal to key[2][97]
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         String keyToFind = arrayTable[2][96];
         byte[] hashFromKeyToFind = digest.digest(keyToFind.getBytes(StandardCharsets.US_ASCII));
-        String reducedHash = reduceHashToNDigitsAndPrependValue(hashFromKeyToFind, 6, id);
         String check = arrayTable[2][97];
+        String reducedHash = reduceHashToNDigitsAndPrependValue(hashFromKeyToFind, 6, id);
 
+        // try to find key from hash in table
         System.out.println("Searching for key: " + keyToFind);
-        tryAllEntries(hashFromKeyToFind, treeMap, 100, 6, id);
-// 2, 96
-
-
+        tryAllEntries(hashFromKeyToFind, treeMap, t, 6, id);
 
         System.out.println("end");
 

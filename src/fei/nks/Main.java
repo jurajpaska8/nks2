@@ -1,15 +1,11 @@
 package fei.nks;
 
-import jdk.internal.util.xml.impl.Pair;
-
 import java.nio.charset.StandardCharsets;
-import java.security.KeyStore;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class Main
 {
@@ -177,19 +173,20 @@ public class Main
         // create table
         String[][] arrayTable = createTable(m, t, id, base);
 
-        // create tree map
+        // create tree map with entries (EP, SP) - sorted
         TreeMap<String, String> treeMap = createTreeMap(arrayTable);
 
         // create random values
         List<String> randomKeys = nRandomKeys(keysToTryCount, base, id);
-        List<byte[]> hashesFromRandomKeys = randomKeys
-                .stream()
-                .map(k -> digest.digest(k.getBytes(StandardCharsets.US_ASCII)))
-                .collect(Collectors.toList());
+        // generate hashes from values
+        List<byte[]> hashesFromRandomKeys = getHashesFromRandomKeys(digest, randomKeys);
 
+        // retrieve all keys
         List<String> retrievedKeysFromHashesHellman = new ArrayList<>();
         for(byte[] hash : hashesFromRandomKeys)
         {
+            // retrieve all values, which can possibly lead to successful decoding (including false alarms)
+            // ReductionEndpointPair contains number of reductions from particular endpoint in order to retrieve key
             List<ReductionsEndpointPair> pairs = tryAllEntries(hash, treeMap, t, numberOfDigitsInPin, id);
             if(pairs.size() > 0)
             {
@@ -197,7 +194,7 @@ public class Main
                 for(ReductionsEndpointPair pair : pairs)
                 {
                     String wantedKey = returnWantedKey(treeMap, pair, t, digest, id);
-                    //System.out.println(wantedKey + " found");
+                    // clearing false alarms
                     if(Arrays.equals(digest.digest(wantedKey.getBytes(StandardCharsets.US_ASCII)), hash))
                     {
                         tmp = wantedKey;
@@ -205,15 +202,14 @@ public class Main
                     }
                 }
                 retrievedKeysFromHashesHellman.add(tmp);
-
             }
             else
             {
-                //System.out.println("Not Found");
                 retrievedKeysFromHashesHellman.add("");
             }
         }
 
+        // checks all three variables should give same output
         long numberOfNonEmptyValues = retrievedKeysFromHashesHellman.stream().filter(k -> k.length() > 0).count();
         long numberOfEqualKeys = 0;
         for(int i = 0; i < retrievedKeysFromHashesHellman.size(); i++)
@@ -242,6 +238,14 @@ public class Main
             }
         }
 
+    }
+
+    private static List<byte[]> getHashesFromRandomKeys(MessageDigest digest, List<String> randomKeys)
+    {
+        return randomKeys
+                .stream()
+                .map(k -> digest.digest(k.getBytes(StandardCharsets.US_ASCII)))
+                .collect(Collectors.toList());
     }
 
     // Message digest is not thread safe - needed to use new instance in different threads

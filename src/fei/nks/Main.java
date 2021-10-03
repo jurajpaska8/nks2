@@ -162,14 +162,14 @@ public class Main
         return treeMap;
     }
 
-    private static void test100lines100columns1000values() throws NoSuchAlgorithmException
+    private static void testMlinesTcolumnsXrandomKeys() throws NoSuchAlgorithmException
     {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         int keysToTryCount = 1_000;
         int base = 1_000_000;
         int numberOfDigitsInPin = 6;
         int m = 100;
-        int t = 10000;
+        int t = 100;
         String id = "92318";
 
         // alarms check
@@ -191,10 +191,8 @@ public class Main
         // retrieve all keys
         List<String> retrievedKeysFromHashesHellman = new ArrayList<>();
         Instant start = Instant.now();
-        int hasctr = 0;
         for(byte[] hash : hashesFromRandomKeys)
         {
-            System.out.println(hasctr++);
             // retrieve all values, which can possibly lead to successful decoding (including false alarms)
             // ReductionEndpointPair contains number of reductions from particular endpoint in order to retrieve key
             List<ReductionsEndpointPair> pairs = tryAllEntries(hash, treeMap, t, numberOfDigitsInPin, id);
@@ -270,7 +268,7 @@ public class Main
     // Message digest is not thread safe - needed to use new instance in different threads
     public static void main(String[] args) throws NoSuchAlgorithmException
     {
-        test100lines100columns1000values();
+        testMlinesTcolumnsXrandomKeys();
         System.out.println("end");
 
     }
